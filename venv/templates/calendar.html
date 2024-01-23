@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rezerwacja Sal</title>
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar/main.min.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar/main.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+      .custom-button-bar {
+        text-align: center;
+        margin-bottom: 10px;
+      }
+  
+      .custom-button-bar button {
+        margin-right: 5px;
+        padding: 5px 10px;
+      }
+  
+      #calendar {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .swal2-container {
+        z-index: 2000; /* Ensure the modal appears above other elements */
+      }
+    </style>
+</head>
+<body>
+<div class="custom-button-bar">
+  <button onclick="customButtonClicked(1)">Button 1</button>
+  <button onclick="customButtonClicked(2)">Button 2</button>
+  <button onclick="customButtonClicked(3)">Button 3</button>
+  <button onclick="customButtonClicked(4)">Button 4</button>
+  <button onclick="customButtonClicked(5)">Logoff</button>
+</div>
+
+<div id='calendar'></div>
+
+<script type="text/javascript">
+    // Przekazanie zmiennych z Pythona do JavaScript
+    var rezerwacje = {{ rezerwacje | tojson }};
+    console.log("Rezerwacje:", rezerwacje); // Dodanie tej linii
+</script>
+
+<script>
+    
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek'
+        },
+        initialView: 'timeGridWeek',
+        slotMinTime: '08:00:00',
+        slotMaxTime: '20:00:00',
+        slotDuration: '00:15:00',
+        selectable: true, 
+        events: rezerwacje,     
+        select: function(info) {
+            openReservationDetails(info);
+        },
+        eventClick: function(info) {
+            editEvent(info.event);
+        },
+        slotLabelFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false // ensures the time is displayed in 24-hour format
+        },
+        
+    });
+
+    calendar.render();
+    
+    
+
+function openSelectLocationModal() {
+            Swal.fire({
+                title: 'Wybierz lokalizację',
+                html: `
+                    <label for="building-select">Budynek:</label>
+                    <select id="building-select" class="swal2-input">
+                        <option value="b1">Budynek 1</option>
+                        <option value="b2">Budynek 2</option>
+                    </select>
+                    <label for="room-type-select">Typ sali:</label>
+                    <select id="room-type-select" class="swal2-input">
+                        <option value="lecture">Wykładowa</option>
+                        <option value="lab">Laboratoryjna</option>
+                    </select>
+                    <label for="equipment-select">Wyposażenie:</label>
+                    <select id="equipment-select" class="swal2-input">
+                        <option value="proj">Projektor</option>
+                        <option value="board">Tablica</option>
+                    </select>
+                    <label for="accessibility-checkbox">Dostęp dla niepełnosprawnych:</label>
+                    <input type="checkbox" id="accessibility-checkbox">
+                    <button id="search-rooms" class="swal2-input">Szukaj</button>
+                `,
+                focusConfirm: false,
+                preConfirm: () => {
+                    // Logika po kliknięciu przycisku "Szukaj"
+                }
+            });
+}
+
+// function openReservationDetails(info) {
+//     Swal.fire({
+//         title: 'Szczegóły rezerwacji',
+//         html: `
+//             <input type="text" id="event-title" class="swal2-input" placeholder="Tytuł wydarzenia">          
+//         `,
+//      focusConfirm: false,
+//         showCancelButton: true,
+//         confirmButtonText: 'Zarezerwuj',
+//         cancelButtonText: 'Anuluj',
+//         preConfirm: () => {
+//             const title = document.getElementById('event-title').value;
+           
+//             if (!title) {
+//                 Swal.showValidationMessage("Proszę wprowadzić tytuł wydarzenia");
+//             }
+            
+//             return { title: title };
+//         },
+       
+//     }).then((result) => {
+//         if (result.isConfirmed) {
+//             // Wysyłanie danych do serwera
+//             fetch('/zarezerwuj_sala', {
+//                 method: 'POST',
+//                 headers: {
+//                     'Content-Type': 'application/json'
+//                     // Dodaj tu inne potrzebne nagłówki, np. CSRF token
+//                 },
+//                 body: JSON.stringify({
+//                     title: result.value.title,
+//                     start: info.startStr, // FullCalendar używa startStr i endStr
+//                     end: info.endStr,
+                  
+//                     // Wykladowca_id zalogowanego użytkownika powinien być pobrany z sesji w aplikacji Flask
+//                 })
+//             })
+//             .then(response => response.json())
+//             .then(data => {
+//                 if(data.status === 'success') {
+//                     // Jeśli dodanie rezerwacji się powiodło
+//                     calendar.addEvent({
+//                         title: result.value.title,
+//                         start: info.start,
+//                         end: info.end,
+//                         allDay: info.allDay
+//                     });
+//                     Swal.fire('Rezerwacja została dodana');
+                    
+//                 } else {
+//                     // Jeśli wystąpił błąd
+//                     Swal.fire('Nie udało się dodać rezerwacji');
+//                 }
+//             })
+//             Swal.fire('Rezerwacja została dodana');
+//         }
+//     });
+// }
+
+function openReservationDetails(info) {
+    fetch('/get_buildings')
+        .then(response => response.json())
+        .then(buildings => {
+            let buildingsOptions = buildings.map(b => `<option value="${b.id}">${b.nazwa}</option>`).join('');
+            buildingsOptions = `<option value="">Select a building</option>` + buildingsOptions;
+
+            Swal.fire({
+                title: 'Szczegóły rezerwacji',
+                html: `
+                    <input type="text" id="event-title" class="swal2-input" placeholder="Tytuł wydarzenia">
+                    <select id="building-selector" class="swal2-input">${buildingsOptions}</select>
+                    <div id="room-selection-container" class="swal2-input"></div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Zarezerwuj',
+                cancelButtonText: 'Anuluj',
+                preConfirm: () => {
+                    const title = document.getElementById('event-title').value;
+                    const buildingId = document.getElementById('building-selector').value;
+                    const selectedRoomElement = document.querySelector('input[name="available-room"]:checked');
+                    const selectedRoom = selectedRoomElement ? selectedRoomElement.value : null;
+                    
+                    if (!title) {
+                        Swal.showValidationMessage("Proszę wprowadzić tytuł wydarzenia");
+                    }
+                    if (!buildingId) {
+                        Swal.showValidationMessage("Please select a building.");
+                    }
+                    if (!selectedRoom) {
+                        Swal.showValidationMessage("Please select a room.");
+                    }
+                    
+                    return {
+                        title: title,
+                        buildingId: buildingId,
+                        roomId: selectedRoom,
+                        start: info.startStr,
+                        end: info.endStr
+                    };
+                },
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Wysyłanie danych do serwera
+                    fetch('/zarezerwuj_sala', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                            // Dodaj tu inne potrzebne nagłówki, np. CSRF token
+                        },
+                        body: JSON.stringify({
+                            title: result.value.title,
+                            start: info.startStr, // FullCalendar używa startStr i endStr
+                            end: info.endStr,
+                            buildingId: result.value.buildingId,
+                            roomId: result.value.roomId,
+                            
+                        
+                            // Wykladowca_id zalogowanego użytkownika powinien być pobrany z sesji w aplikacji Flask
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.status === 'success') {
+                            // Jeśli dodanie rezerwacji się powiodło
+                            calendar.addEvent({
+                                title: result.value.title,
+                                start: info.start,
+                                end: info.end,
+                                allDay: info.allDay
+                            });
+                            Swal.fire('Rezerwacja została dodana');
+                            
+                        } else {
+                            // Jeśli wystąpił błąd
+                            Swal.fire('Nie udało się dodać rezerwacji');
+                        }
+                    })
+                    Swal.fire('Rezerwacja została dodana');
+                }
+            });
+
+            // Set up an event listener for when a building is selected to fetch available rooms
+            document.getElementById('building-selector').addEventListener('change', function() {
+                const selectedBuildingId = this.value;
+                const startTime = info.startStr; // Taken from the calendar selection
+                const endTime = info.endStr; // Taken from the calendar selection
+
+                if (selectedBuildingId) {
+                    fetch(`/get_available_rooms?budynek_id=${selectedBuildingId}&czas_start=${startTime}&czas_koniec=${endTime}`)
+                        .then(response => response.json())
+                        .then(rooms => {
+                            const roomSelectionContainer = document.getElementById('room-selection-container');
+                            roomSelectionContainer.innerHTML = rooms.map(room => 
+                                `<label><input type="radio" name="available-room" value="${room.numer_sali}">${room.nazwa} - ${room.numer_sali}</label>`
+                            ).join('');
+                        });
+                } else {
+                    document.getElementById('room-selection-container').innerHTML = '';
+                }
+            });
+        });
+}
+
+
+function editEvent(event) {
+    Swal.fire({
+        title: 'Edytuj rezerwację',
+        html: `
+            <button id="change-room" class="swal2-input">Zamień salę</button>
+            <button id="cancel-reservation" class="swal2-input">Anuluj rezerwację</button>
+            <button id="order-equipment" class="swal2-input">Zamów wyposażenie</button>
+            <button id="edit-reservation" class="swal2-input">Edytuj rezerwację</button>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        cancelButtonText: 'Zamknij',
+        showConfirmButton: false,
+        didOpen: () => {
+            document.getElementById('change-room').addEventListener('click', () => {
+                openSelectLocationModal();
+            });
+            document.getElementById('cancel-reservation').addEventListener('click', () => {
+                anulujRezerwacje(event.id);
+            });
+            document.getElementById('order-equipment').addEventListener('click', () => {
+                openEquipmentOrderModal();
+            });
+            document.getElementById('edit-reservation').addEventListener('click', () => {
+                openEditReservationModal(event);
+            });
+        }
+    });
+}
+function anulujRezerwacje(rezerwacjaId) {
+    fetch(`/anuluj_rezerwacje/${rezerwacjaId}`, {
+        method: 'POST',
+        // Możesz dodać nagłówki, jeśli są potrzebne, np. dla CSRF token
+    })
+    .then(response => {
+        if (response.ok) {
+            // Jeśli usunięcie się powiodło, odśwież kalendarz lub usuń wydarzenie
+            calendar.getEventById(rezerwacjaId).remove();
+            Swal.close();
+            Swal.fire('Rezerwacja została anulowana');
+        } else {
+            throw new Error('Problem z anulowaniem rezerwacji');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Nie udało się anulować rezerwacji');
+    });
+}
+
+
+});
+// Funkcja odpowiadająca za kliknięcia przycisków
+function customButtonClicked(buttonNumber) {
+    if(buttonNumber === 5) {
+        window.location.href = '/logoff'; // Redirect to logoff route
+    } else {
+        alert('Button ' + buttonNumber + ' clicked');
+    }
+}
+</script>
+
+</body>
+</html>
